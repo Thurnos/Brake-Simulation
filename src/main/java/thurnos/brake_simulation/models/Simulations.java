@@ -49,4 +49,15 @@ public class Simulations {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    public void setCar(Cars car) {
+    }
+
+    public void setTire(Tires tire) {
+    }
+
+    public void setRoadCondition(RoadConditions road) {
+    }
+
+    public void setBrake(Brakes brake) {
+    }
 }
