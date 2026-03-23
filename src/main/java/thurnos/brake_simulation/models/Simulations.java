@@ -49,6 +49,18 @@ public class Simulations {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "reaction_time")
+    private Double reactionTime;
+
+    @Column(name = "has_abs")
+    private Boolean hasAbs;
+
+    @Column(name = "total_distance")
+    private Double totalDistance;
+    @Column(name = "total_time")
+    private Double totalTime;
+
+
     public void setCar(Cars car) {
     }
 
