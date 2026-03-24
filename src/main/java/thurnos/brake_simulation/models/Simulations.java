@@ -40,12 +40,6 @@ public class Simulations {
     @Column(name = "tire_tread_mm")
     private Double tireTreadMm;
 
-    @Column(name = "stopping_distance")
-    private Double stoppingDistance;
-
-    @Column(name = "stopping_time")
-    private Double stoppingTime;
-
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -59,6 +53,18 @@ public class Simulations {
     private Double totalDistance;
     @Column(name = "total_time")
     private Double totalTime;
+
+    @Column(name = "slope_percent")
+    private Double slopePercent;
+
+    @Column(name = "reaction_distance")
+    private Double reactionDistance;
+
+    @Column(name = "braking_time")
+    private Double brakingTime;
+
+    @Column(name = "braking_distance")
+    private Double brakingDistance;
 
 
     public void setCar(Cars car) {
