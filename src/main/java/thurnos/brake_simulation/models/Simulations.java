@@ -68,14 +68,18 @@ public class Simulations {
 
 
     public void setCar(Cars car) {
+        this.cars = car;
     }
 
     public void setTire(Tires tire) {
+        this.tires = tire;
     }
 
     public void setRoadCondition(RoadConditions road) {
+        this.roadConditions = road;
     }
 
     public void setBrake(Brakes brake) {
+        this.brakes = brake;
     }
 }

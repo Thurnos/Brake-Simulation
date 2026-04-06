@@ -93,6 +93,15 @@ public class BrakingPhysicsEngineTest {
         );
         assertTrue(lighter.getTotalDistance() > heavier.getTotalDistance());
     }
+    @Test
+    void shouldPassOnPossitiveTotalDistance() {
+
+        Simulations result = engine.calculateFullStop(
+                1, 0.5, 2, 0.4, 0.7, 1800, 2.0, false, -30
+        );
+
+        assertTrue(result.getTotalDistance()>0);
+    }
 
 }
 
