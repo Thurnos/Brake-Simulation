@@ -1,0 +1,52 @@
+id,brand,model,base_grip,tire_type
+1,Michelin,"Pilot Sport 4",1.1,sport
+2,Continental,"PremiumContact 6",1,all-season
+3,Pirelli,"P Zero",1.15,sport
+4,Goodyear,UltraGrip,0.85,winter
+5,Bridgestone,Turanza,0.95,touring
+6,Michelin,"Pilot Sport 5",1.12,sport
+7,Michelin,"Primacy 4",0.98,touring
+8,Michelin,"CrossClimate 2",1,all-season
+9,Michelin,"Alpin 6",0.88,winter
+10,Continental,"SportContact 7",1.14,sport
+11,Continental,"EcoContact 6",0.95,eco
+12,Continental,"WinterContact TS870",0.87,winter
+13,Pirelli,"P Zero Nero",1.13,sport
+14,Pirelli,"Cinturato P7",0.97,touring
+15,Pirelli,"Winter Sottozero 3",0.86,winter
+16,Goodyear,"Eagle F1 Asymmetric 6",1.11,sport
+17,Goodyear,"EfficientGrip Performance",0.96,eco
+18,Goodyear,"UltraGrip Performance+",0.88,winter
+19,Bridgestone,"Potenza Sport",1.13,sport
+20,Bridgestone,"Ecopia EP150",0.94,eco
+21,Bridgestone,"Blizzak LM005",0.87,winter
+22,Dunlop,"Sport Maxx RT2",1.1,sport
+23,Dunlop,"SP Winter Sport 5",0.86,winter
+24,Hankook,"Ventus S1 Evo3",1.09,sport
+25,Hankook,"Kinergy Eco2",0.95,eco
+26,Hankook,"Winter i*cept RS3",0.87,winter
+27,Yokohama,"Advan Sport V107",1.12,sport
+28,Yokohama,"BluEarth GT AE51",0.97,touring
+29,Yokohama,"W.drive V905",0.85,winter
+30,Toyo,"Proxes Sport 2",1.1,sport
+31,Toyo,"NanoEnergy 3",0.94,eco
+32,Toyo,"Observe S944",0.86,winter
+33,Falken,"Azenis FK520",1.1,sport
+34,Falken,"Ziex ZE310",0.96,touring
+35,Falken,"Eurowinter HS02",0.85,winter
+36,Nokian,Powerproof,1.08,sport
+37,Nokian,Wetproof,0.98,touring
+38,Nokian,"Hakkapeliitta R5",0.9,winter
+39,Kumho,"Ecsta PS71",1.05,sport
+40,Kumho,"Solus HS51",0.96,touring
+41,Kumho,"WinterCraft WP52",0.85,winter
+42,Uniroyal,"RainSport 5",1.03,sport
+43,Uniroyal,"AllSeasonExpert 2",0.97,all-season
+44,"General Tire","Altimax One S",1.02,sport
+45,"General Tire","Altimax Winter 3",0.85,winter
+46,Firestone,"Firehawk Sport",1.06,sport
+47,Firestone,Roadhawk,0.96,touring
+48,Vredestein,"Ultrac Vorti",1.07,sport
+49,Vredestein,"Quatrac Pro",0.99,all-season
+50,BFGoodrich,"G-Force Sport",1.04,sport
+51,BFGoodrich,"Winter T/A KSI",0.86,winter

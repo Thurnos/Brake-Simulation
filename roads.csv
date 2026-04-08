@@ -1,0 +1,6 @@
+id,name,grip_modifier
+1,"Dry Asphalt",1
+2,"Wet Asphalt",0.7
+3,Snow,0.4
+4,Ice,0.2
+5,Gravel,0.6

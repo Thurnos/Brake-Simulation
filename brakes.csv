@@ -1,0 +1,51 @@
+id,brand,model,efficiency,type
+1,Brembo,"X500 Carbon",1,ceramic
+2,ATE,"Standard Kit",0.85,steel
+3,Bosch,QuietCast,0.8,steel
+4,EBC,Yellowstuff,0.95,performance
+5,Ferodo,DS2500,0.92,sport
+6,Brembo,"GT Kit",0.98,performance
+7,Brembo,"M Sport",0.97,performance
+8,Brembo,"Ceramic Pro",1,ceramic
+9,ATE,PowerDisc,0.88,steel
+10,ATE,"Premium Line",0.87,steel
+11,Bosch,"Blue Line",0.82,steel
+12,Bosch,"Performance Plus",0.86,performance
+13,EBC,Redstuff,0.93,sport
+14,EBC,Bluestuff,0.96,performance
+15,Ferodo,DS3000,0.97,performance
+16,Ferodo,Premier,0.85,steel
+17,Textar,Pro,0.84,steel
+18,Textar,Advanced,0.86,steel
+19,Zimmermann,"Sport Z",0.9,sport
+20,Zimmermann,"Coat Z",0.88,steel
+21,TRW,Cotec,0.83,steel
+22,TRW,Performance,0.89,sport
+23,Pagid,Street+,0.87,steel
+24,Pagid,RS29,0.95,performance
+25,Akebono,ProACT,0.86,ceramic
+26,Akebono,Euro,0.88,ceramic
+27,StopTech,Street,0.9,sport
+28,StopTech,"Sport Kit",0.94,performance
+29,Wilwood,Dynapro,0.96,performance
+30,Wilwood,Aero6,0.98,performance
+31,Hawk,HPS,0.91,sport
+32,Hawk,"HP Plus",0.94,performance
+33,Endless,MX72,0.95,performance
+34,Endless,CC-Rg,0.97,performance
+35,"Project Mu",HC+,0.96,performance
+36,"Project Mu",NS400,0.89,sport
+37,Tarox,Strada,0.88,sport
+38,Tarox,Corsa,0.95,performance
+39,Mintex,M1144,0.9,sport
+40,Mintex,M1155,0.93,performance
+41,Galfer,Street,0.87,steel
+42,Galfer,Sport,0.91,sport
+43,Delphi,Standard,0.82,steel
+44,Delphi,Premium,0.85,steel
+45,Valeo,First,0.8,steel
+46,Valeo,Advanced,0.84,steel
+47,Nissin,OEM+,0.86,steel
+48,Nissin,Performance,0.9,sport
+49,SBS,"Street Excel",0.88,sport
+50,SBS,Racing,0.95,performance

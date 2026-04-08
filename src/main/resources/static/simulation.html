@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Brake Simulation Pro</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        select, input {
+            width: 100%;
+            margin: 5px 0;
+            padding: 6px;
+            border-radius: 6px;
+            border: none;
+        }
+        .result {
+            margin-top: 10px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 8px;
+            width: 100%;
+            border: none;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>🚗 Brake Simulation Pro</h2>
+
+<div class="container">
+
+    <!-- A -->
+    <div class="card">
+        <h3>Scenario A</h3>
+
+        <select id="carA"></select>
+        <select id="tireA"></select>
+        <select id="brakeA"></select>
+        <select id="roadA"></select>
+
+        <input type="number" id="speedA" value="100">
+        <input type="number" id="treadA" value="7">
+        <input type="number" id="slopeA" value="0">
+
+        <label><input type="checkbox" id="absA" checked> ABS</label>
+
+        <select id="driverA">
+            <option>ALERT</option>
+            <option selected>NORMAL</option>
+            <option>TIRED</option>
+        </select>
+
+        <button onclick="runScenario('A')">Run A</button>
+
+        <div id="resultA" class="result"></div>
+    </div>
+
+    <!-- B -->
+    <div class="card">
+        <h3>Scenario B</h3>
+
+        <select id="carB"></select>
+        <select id="tireB"></select>
+        <select id="brakeB"></select>
+        <select id="roadB"></select>
+
+        <input type="number" id="speedB" value="100">
+        <input type="number" id="treadB" value="7">
+        <input type="number" id="slopeB" value="0">
+
+        <label><input type="checkbox" id="absB" checked> ABS</label>
+
+        <select id="driverB">
+            <option>ALERT</option>
+            <option selected>NORMAL</option>
+            <option>TIRED</option>
+        </select>
+
+        <button onclick="runScenario('B')">Run B</button>
+
+        <div id="resultB" class="result"></div>
+    </div>
+
+</div>
+
+<button onclick="runBoth()">Run Both</button>
+
+<canvas id="chart"></canvas>
+
+<script>
+    let chart;
+    let lastA = null;
+    let lastB = null;
+
+    async function loadData() {
+        const cars = await fetch('/api/cars').then(r => r.json());
+        const tires = await fetch('/api/tires').then(r => r.json());
+        const brakes = await fetch('/api/brakes').then(r => r.json());
+        const roads = await fetch('/api/roads').then(r => r.json());
+
+        fill('carA','carB',cars,c=>c.brand+" "+c.model);
+        fill('tireA','tireB',tires,t=>t.brand+" "+t.model);
+        fill('brakeA','brakeB',brakes,b=>b.brand+" "+b.model);
+        fill('roadA','roadB',roads,r=>r.name);
+    }
+
+    function fill(a,b,data,label){
+        [a,b].forEach(id=>{
+            let el=document.getElementById(id);
+            data.forEach(d=>{
+                let o=document.createElement('option');
+                o.value=d.id;
+                o.text=label(d);
+                el.add(o);
+            });
+        });
+    }
+
+    async function runSimulation(prefix){
+        const params=new URLSearchParams({
+            carId:document.getElementById('car'+prefix).value,
+            tireId:document.getElementById('tire'+prefix).value,
+            brakeId:document.getElementById('brake'+prefix).value,
+            roadId:document.getElementById('road'+prefix).value,
+            speed:document.getElementById('speed'+prefix).value,
+            tread:document.getElementById('tread'+prefix).value,
+            slope:document.getElementById('slope'+prefix).value,
+            abs:document.getElementById('abs'+prefix).checked,
+            driverCondition:document.getElementById('driver'+prefix).value
+        });
+
+        const res=await fetch('/api/simulations/execute?'+params,{method:'POST'});
+        return res.json();
+    }
+
+    async function runScenario(prefix){
+        document.getElementById('result'+prefix).innerHTML="Calculating...";
+
+        const data=await runSimulation(prefix);
+
+        display(prefix,data);
+
+        if(prefix==='A') lastA=data;
+        if(prefix==='B') lastB=data;
+
+        if(lastA && lastB) updateChart();
+    }
+
+    function runBoth(){
+        runScenario('A');
+        runScenario('B');
+    }
+
+    function display(p,d){
+        document.getElementById('result'+p).innerHTML=
+            `Distance: ${d.totalDistance.toFixed(1)} m<br>
+         Time: ${d.totalTime.toFixed(2)} s<br>
+         Reaction: ${d.reactionDistance.toFixed(1)} m<br>
+         Braking: ${d.brakingDistance.toFixed(1)} m`;
+    }
+
+    function updateChart(){
+        if(chart) chart.destroy();
+
+        chart=new Chart(document.getElementById('chart'),{
+            type:'bar',
+            data:{
+                labels:['Total','Reaction','Braking'],
+                datasets:[
+                    {label:'A',data:[lastA.totalDistance,lastA.reactionDistance,lastA.brakingDistance]},
+                    {label:'B',data:[lastB.totalDistance,lastB.reactionDistance,lastB.brakingDistance]}
+                ]
+            }
+        });
+    }
+
+    loadData();
+</script>
+
+</body>
+</html>
