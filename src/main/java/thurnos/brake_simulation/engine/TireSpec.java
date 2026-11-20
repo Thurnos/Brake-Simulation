@@ -49,6 +49,10 @@ public record TireSpec(double peakMu, double loadSensitivity, double slipB, doub
         return new TireSpec(peakMu, k, slipB, slipC, slipE, water);
     }
 
+    public TireSpec withPeakMu(double mu) {
+        return new TireSpec(mu, loadSensitivity, slipB, slipC, slipE, water);
+    }
+
     public TireSpec withWater(WaterFilm film) {
         return new TireSpec(peakMu, loadSensitivity, slipB, slipC, slipE, film);
     }

@@ -1,4 +1,4 @@
-# Braking engine (Phases 1 to 4)
+# Braking engine (Phases 1 to 5)
 
 A time-stepped, straight-line braking simulation in `thurnos.brake_simulation.engine`.
 It has no Spring, JPA or Lombok dependencies, so it can be unit-tested and reused anywhere.
@@ -120,6 +120,46 @@ Starting a 100 km/h stop with brakes already at 600 °C: strong brakes 37 m → 
 Not modelled: separate rotor and pad temperatures, cold-brake friction loss, fluid boiling, radiation, rotor
 warping, and brake cooling variations with wheel design.
 
+### Calibration, surrogate and playback (Phase 5)
+
+**There is no measured data in the repo.** `simulations.csv` holds results of the old formula (1035 rows with results,
+5 without), not real stops, so there is nothing to calibrate against yet. What exists instead is the tool for it:
+
+```
+java -cp target/classes thurnos.brake_simulation.engine.CalibrateCli measurements.csv
+```
+
+Fill `measurements.template.csv` with real measured stops (braking distance without reaction distance; surface,
+weight, speed, optionally tread, ABS, tire and brake table values). Per surface it prints the factor to multiply
+that road's `grip_modifier` with and the error before and after. Under the hood `Calibrator` adjusts one number,
+a grip scale, by minimising the relative error of braking distance. Tested by recovering a known scale from
+synthetic stops (0.8–1.4 within 1–2%), under 4% measurement noise, and for wet and ice. It warns when the fit hits its
+search limits, which means the data and the model disagree by more than grip can explain.
+Reference points worth measuring first: dry and wet stops from 100 km/h on good and worn tires, one per surface family.
+
+**Surrogate.** `train_model.py` learned the old formula and had a column-name bug: it looks for `road_grip` or `grip`,
+but the merged table calls it `grip_modifier`, so the feature was always 1.0 and the model never saw the road.
+`train_surrogate.py` replaces it. `DatasetGenerator` runs the engine over all rows of the tables plus 15000
+random scenarios and writes `engine_dataset.csv` (16035 stopped runs, about 1 minute); the script trains gradient boosting
+on the log of the targets and saves `surrogate.pkl`. On held-out rows:
+
+| Target | Median error | 90th percentile |
+| --- | --- | --- |
+| total distance | 1.5% | 3.8% |
+| total time | 1.2% | 3.1% |
+| braking distance | 1.9% | 4.8% |
+
+Only 0.3% of held-out rows are more than 10% off, and the worst (up to 40%) are steep-downhill hydroplaning
+stops at 157 km/h, where the engine itself changes abruptly. The engine takes about 4 ms per stop, the surrogate about
+0.05 ms per row in batches (90 times faster), so it pays off for large sweeps, not single stops. Regenerate the dataset and retrain after changing
+the engine or the tables.
+
+**Playback.** `/engine.html` (static, no libraries) runs `/api/engine/simulate` and plays the stop back: car on a
+road with reaction zone and obstacle, a time scrubber, and charts for speed and deceleration, wheel slip with ABS
+pressure and water grip, and brake temperature with pad friction. "Run repeated stops" draws braking distance and
+front brake temperature per stop. Checked in a browser against real engine output for a dry stop with obstacle, a
+hydroplaning stop, hot brakes and an 8-stop sequence; not yet against a running Spring server.
+
 ## Numerics
 
 Wheel dynamics are stiff at low speed, so the wheel is advanced with a linearly implicit step, stable at the default 1 ms.
@@ -145,6 +185,8 @@ found by comparing against an independent integration and is now covered by test
 - cars on ice come to rest instead of creeping; a car that cannot hold itself on a slope reports `stopped: false`
 - results agree across step sizes from 0.5 ms to 5 ms
 - dry 100–0 km/h with good tires lands in the 33–42 m range road tests report
+
+`CalibratorTest` (Phase 5): recovers known grip scales, copes with noise, never ends worse than it started beyond numerical jitter, warns at its limits, reads CSV with quotes and NULLs.
 
 `BrakeThermalTest` (Phase 4):
 

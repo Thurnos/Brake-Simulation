@@ -1,0 +1,5 @@
+# Template for CalibrateCli. Fill with real measured stops (braking distance WITHOUT reaction distance), then run:
+#   java -cp target/classes thurnos.brake_simulation.engine.CalibrateCli measurements.csv
+# Required: surface (dry|wet|snow|ice), weight_kg, speed_kmh, measured_braking_m
+# Optional: tread_mm (default 8), abs (1/0, default 1), base_grip (tire table value, default 1.0), efficiency (brake table value, default 1.0)
+surface,weight_kg,speed_kmh,measured_braking_m,tread_mm,abs,base_grip,efficiency
