@@ -11,12 +11,13 @@ import thurnos.brake_simulation.engine.SimulationResult;
 import thurnos.brake_simulation.models.DriverCondition;
 import thurnos.brake_simulation.service.EngineSimulationService;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * Time-stepped physics engine. Same parameter names as {@code /api/simulations/execute},
- * plus an optional water film depth in mm ({@code water}, overrides the road row) and an optional
- * obstacle distance. Nothing is saved.
+ * plus an optional water film depth in mm ({@code water}, overrides the road row), an optional starting
+ * brake temperature in °C ({@code brakeTemp}) and an optional obstacle distance. Nothing is saved.
  */
 @RestController
 @RequestMapping("/api/engine")
@@ -40,11 +41,37 @@ public class EngineController {
             @RequestParam boolean abs,
             @RequestParam DriverCondition driverCondition,
             @RequestParam(required = false) Double water,
+            @RequestParam(required = false) Double brakeTemp,
             @RequestParam(required = false) Double obstacle,
             @RequestParam(defaultValue = "true") boolean trace
     ) {
         return service.run(carId, tireId, brakeId, roadId,
-                speed, tread, slope, abs, driverCondition, water, obstacle, trace);
+                speed, tread, slope, abs, driverCondition, water, brakeTemp, obstacle, trace);
+    }
+
+    /**
+     * Repeated stops with brake heat carried over: {@code stops} stops from {@code speed}, each followed by
+     * {@code rest} seconds of cruising at {@code cruise} km/h. Returns one summary per stop.
+     */
+    @PostMapping("/repeated-stops")
+    public List<SimulationResult> repeatedStops(
+            @RequestParam Long carId,
+            @RequestParam Long tireId,
+            @RequestParam Long brakeId,
+            @RequestParam Long roadId,
+            @RequestParam double speed,
+            @RequestParam double tread,
+            @RequestParam double slope,
+            @RequestParam boolean abs,
+            @RequestParam DriverCondition driverCondition,
+            @RequestParam(required = false) Double water,
+            @RequestParam(required = false) Double brakeTemp,
+            @RequestParam(defaultValue = "6") int stops,
+            @RequestParam(defaultValue = "15") double rest,
+            @RequestParam(defaultValue = "50") double cruise
+    ) {
+        return service.runRepeatedStops(carId, tireId, brakeId, roadId,
+                speed, tread, slope, abs, driverCondition, water, brakeTemp, stops, rest, cruise);
     }
 
     /** Out-of-range inputs (negative speed, bad obstacle distance, ...) come back as a 400 with the reason. */

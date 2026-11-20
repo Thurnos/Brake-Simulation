@@ -1,4 +1,4 @@
-# Braking engine (Phases 1 to 3)
+# Braking engine (Phases 1 to 4)
 
 A time-stepped, straight-line braking simulation in `thurnos.brake_simulation.engine`.
 It has no Spring, JPA or Lombok dependencies, so it can be unit-tested and reused anywhere.
@@ -14,12 +14,16 @@ POST /api/engine/simulate?carId=1&tireId=1&brakeId=1&roadId=2
 Optional `obstacle` (metres ahead) adds an impact speed to the result. `trace=false` drops the time series.
 Optional `water` (mm) sets the water film depth and overrides the road row; without it the engine uses
 `road_conditions.water_depth_mm`, and if that is empty, 2 mm on wet-grip roads and none elsewhere.
+Optional `brakeTemp` (°C) sets the brake temperature at the start (default 20 °C). A second endpoint,
+`POST /api/engine/repeated-stops`, takes the same parameters plus `stops` (default 6), `rest` (seconds between stops,
+default 15) and `cruise` (km/h driven during the rest, default 50) and returns one summary per stop.
 
 The response holds the summary (stop distance, stop time, reaction and braking distance, peak deceleration,
 impact speed, `brakeEnergyJ`, `tireSlipEnergyJ`) and a `trace` of points every 0.02 s with speed, position,
 deceleration, pedal, per-axle tire force, per-axle load, per-axle **slip**, per-axle **brake pressure** (below 1
 while ABS releases), lock flags and a `waterGripFactor` (1 = full grip, lower while hydroplaning). The summary also
-holds `hydroplaningOnsetKmh` (null on a dry road). A car that cannot stop returns `stopped: false` and `null` distances.
+holds `hydroplaningOnsetKmh` (null on a dry road) and `thermal` (peak and final brake temperatures per axle and the
+lowest fade factor). Trace points also carry per-axle brake temperature and fade factor. A car that cannot stop returns `stopped: false` and `null` distances.
 
 From code:
 
@@ -89,6 +93,33 @@ Optional extra row for flooded roads:
 INSERT INTO road_conditions (name, grip_modifier, water_depth_mm) VALUES ('Standing water', 0.6, 6);
 ```
 
+### Brake heating and fade (Phase 4)
+
+`BrakeThermal` keeps one temperature per axle (a lumped rotor, 9 kg front and 5 kg rear for a 1500 kg car):
+
+- **Heating.** 90% of the brake work (the engine's `brakeEnergy`) goes into the rotor each step. Front brakes do about 70%
+  of the work, so they run hotter.
+- **Cooling.** Heat loss to the air is `1.1 W/K per kg of rotor + 0.17 W/K per kg per m/s of car speed`, so brakes
+  cool slowly standing still and about five times faster at motorway speed. Rotor time constant is about 80 s at 100 km/h.
+- **Fade.** Pad friction is 100% up to 350 °C and falls smoothly to 50% at 750 °C. It reduces the brake force the
+  system can deliver, nothing else. So fade lengthens a stop only when the brakes rather than the tires are the limit:
+  strong brakes (1.3 g of brake force against 1.1 g of tire grip) hide moderate fade, weak or worn ones do not.
+
+A single normal stop barely heats the brakes (100 km/h: front about 95 °C, 160 km/h: about 210 °C), so fade is a repeated-stop,
+hot-start or long-descent effect. Braking distance (without reaction) from 120 km/h, 15 s of cruising at 15 m/s between stops:
+
+| Stop | Strong brakes (1.0) | Stock (0.8) | Weak (0.65) |
+| --- | --- | --- | --- |
+| 1 | 52.6 m | 57.9 m | 67.8 m |
+| 4 | 52.6 m | 57.9 m | 67.9 m |
+| 6 | 52.7 m | 60.5 m | 70.7 m |
+| 8 | 56.8 m | 64.8 m | 76.5 m |
+| front rotor peak at stop 8 | 561 °C | 561 °C | 547 °C |
+
+Starting a 100 km/h stop with brakes already at 600 °C: strong brakes 37 m → 50 m, weak brakes 48 m → 73 m.
+Not modelled: separate rotor and pad temperatures, cold-brake friction loss, fluid boiling, radiation, rotor
+warping, and brake cooling variations with wheel design.
+
 ## Numerics
 
 Wheel dynamics are stiff at low speed, so the wheel is advanced with a linearly implicit step, stable at the default 1 ms.
@@ -114,6 +145,15 @@ found by comparing against an independent integration and is now covered by test
 - cars on ice come to rest instead of creeping; a car that cannot hold itself on a slope reports `stopped: false`
 - results agree across step sizes from 0.5 ms to 5 ms
 - dry 100–0 km/h with good tires lands in the 33–42 m range road tests report
+
+`BrakeThermalTest` (Phase 4):
+
+- temperature rise times heat capacity matches 90% of the brake energy (within 3%, the rest has left with the air)
+- cooling equals the exact exponential and is faster at higher speed
+- fade factor is 1 up to its start temperature, never rises with temperature, and ends at its floor
+- one normal stop does not fade; hot brakes lengthen the stop clearly when the brakes are the limit, and not at all at moderate heat when the tires are
+- repeated stops get hotter and longer, and short rests are worse than long rests
+- energy balance is unaffected; switching the model off gives identical single-stop results
 
 `WaterFilmTest` (Phase 3):
 
@@ -150,6 +190,6 @@ results come from illustrative curve shapes, so the pattern is more trustworthy 
 | Hydroplaning is a smooth grip-loss curve around a simplified onset speed, not a fitted model (Gallaway/TTI style) | `WaterFilm` | fitted onset model if data exists |
 | Tire pressure fixed at 220 kPa unless set in code | `WaterFilm.DEFAULT_PRESSURE_KPA` | a pressure column on `tires` |
 | Wheelbase, CoG height, Cd, area, Crr, wheel size and inertia guessed from mass | `VehicleSpec.estimate` | real columns on the `cars` table |
-| No brake heating | | thermal model (Phase 4) |
+| One lumped temperature per axle; rotor mass, cooling and fade curve are typical values, not measured | `BrakeThermal` | per-brake data (rotor size, pad compound) |
 
 Treat outputs as plausible estimates for exploring ideas, not for real-world safety decisions.

@@ -3,6 +3,7 @@ package thurnos.brake_simulation.service;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import thurnos.brake_simulation.engine.BrakeSequence;
 import thurnos.brake_simulation.engine.BrakingEngine;
 import thurnos.brake_simulation.engine.Scenario;
 import thurnos.brake_simulation.engine.ScenarioFactory;
@@ -18,6 +19,7 @@ import thurnos.brake_simulation.repository.RoadConditionsRepository;
 import thurnos.brake_simulation.repository.TiresRepository;
 
 import java.math.BigInteger;
+import java.util.List;
 
 /**
  * Runs the time-stepped engine for a combination of rows from the existing tables.
@@ -53,8 +55,44 @@ public class EngineSimulationService {
                                 boolean hasAbs,
                                 DriverCondition driverCondition,
                                 Double waterDepthOverrideMm,
+                                Double brakeTempC,
                                 Double obstacleM,
                                 boolean includeTrace) {
+
+        Scenario scenario = buildScenario(carId, tireId, brakeId, roadId, speedKmh, treadDepthMm, slopePercent,
+                hasAbs, driverCondition, waterDepthOverrideMm, brakeTempC, obstacleM);
+        SimulationResult result = engine.simulate(scenario);
+        return includeTrace ? result : result.withoutTrace();
+    }
+
+    /**
+     * Stop, drive for {@code restS} seconds at {@code cruiseKmh}, stop again, ... with brake heat carried over.
+     * One summary result per stop (no trace).
+     */
+    public List<SimulationResult> runRepeatedStops(Long carId,
+                                                   Long tireId,
+                                                   Long brakeId,
+                                                   Long roadId,
+                                                   double speedKmh,
+                                                   double treadDepthMm,
+                                                   double slopePercent,
+                                                   boolean hasAbs,
+                                                   DriverCondition driverCondition,
+                                                   Double waterDepthOverrideMm,
+                                                   Double brakeTempC,
+                                                   int stops,
+                                                   double restS,
+                                                   double cruiseKmh) {
+
+        Scenario scenario = buildScenario(carId, tireId, brakeId, roadId, speedKmh, treadDepthMm, slopePercent,
+                hasAbs, driverCondition, waterDepthOverrideMm, brakeTempC, null);
+        return BrakeSequence.repeatedStops(engine, scenario, stops, restS, Scenario.kmhToMs(cruiseKmh));
+    }
+
+    private Scenario buildScenario(Long carId, Long tireId, Long brakeId, Long roadId, double speedKmh,
+                                   double treadDepthMm, double slopePercent, boolean hasAbs,
+                                   DriverCondition driverCondition, Double waterDepthOverrideMm,
+                                   Double brakeTempC, Double obstacleM) {
 
         Cars car = carRepo.findById(BigInteger.valueOf(carId))
                 .orElseThrow(() -> notFound("Car", carId));
@@ -72,7 +110,7 @@ public class EngineSimulationService {
             waterDepthMm = ScenarioFactory.defaultWaterDepthMm(gripModifier);
         }
 
-        Scenario scenario = ScenarioFactory.fromTableValues(
+        return ScenarioFactory.fromTableValues(
                 required(car.getWeightKg(), "car weight"),
                 required(tire.getBaseGrip(), "tire base grip"),
                 gripModifier,
@@ -83,10 +121,8 @@ public class EngineSimulationService {
                 driverCondition.getReactionTime(),
                 speedKmh,
                 waterDepthMm,
+                brakeTempC,
                 obstacleM);
-
-        SimulationResult result = engine.simulate(scenario);
-        return includeTrace ? result : result.withoutTrace();
     }
 
     private static ResponseStatusException notFound(String what, Long id) {

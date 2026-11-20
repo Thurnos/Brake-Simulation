@@ -49,6 +49,7 @@ public final class ScenarioFactory {
      * @param reactionTimeS   total driver delay (DriverCondition.getReactionTime())
      * @param speedKmh        speed when the hazard appears
      * @param waterDepthMm    depth of the water film on the road, or null for none
+     * @param initialBrakeTempC brake temperature at the start, or null for air temperature (20 °C)
      * @param obstacleM       distance to an obstacle, or null
      */
     public static Scenario fromTableValues(double weightKg,
@@ -62,11 +63,35 @@ public final class ScenarioFactory {
                                            double speedKmh,
                                            Double waterDepthMm,
                                            Double obstacleM) {
+        return fromTableValues(weightKg, tireBaseGrip, roadModifier, brakeEfficiency, treadDepthMm, slopePercent,
+                hasAbs, reactionTimeS, speedKmh, waterDepthMm, null, obstacleM);
+    }
+
+    /**
+     * Same, with the brake temperature at the start of the run (both axles, °C; null = brakes at air temperature).
+     * Hot brakes fade, which matters when the brakes rather than the tires limit braking.
+     */
+    public static Scenario fromTableValues(double weightKg,
+                                           double tireBaseGrip,
+                                           double roadModifier,
+                                           double brakeEfficiency,
+                                           double treadDepthMm,
+                                           double slopePercent,
+                                           boolean hasAbs,
+                                           double reactionTimeS,
+                                           double speedKmh,
+                                           Double waterDepthMm,
+                                           Double initialBrakeTempC,
+                                           Double obstacleM) {
+        BrakeThermal thermal = BrakeThermal.estimate(weightKg);
+        if (initialBrakeTempC != null) {
+            thermal = thermal.withInitialTemps(initialBrakeTempC, initialBrakeTempC);
+        }
         WaterFilm film = WaterFilm.of(waterDepthMm == null ? 0.0 : waterDepthMm, treadDepthMm);
         double peakMu = tireBaseGrip * roadModifier * film.treadGripFactor();
         return new Scenario(
                 VehicleSpec.estimate(weightKg),
-                BrakeSpec.fromEfficiency(brakeEfficiency),
+                BrakeSpec.fromEfficiency(brakeEfficiency).withThermal(thermal),
                 TireSpec.forSurface(peakMu, SurfaceKind.fromGripModifier(roadModifier)).withWater(film),
                 DriverSpec.fromReactionTime(reactionTimeS),
                 Scenario.kmhToMs(speedKmh),

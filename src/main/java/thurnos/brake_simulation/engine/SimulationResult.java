@@ -18,6 +18,7 @@ import java.util.List;
  * @param brakeEnergyJ         energy turned into heat in the brakes (input for the Phase 4 thermal model)
  * @param tireSlipEnergyJ      energy lost to tire slip against the road
  * @param hydroplaningOnsetKmh speed above which the tires start to hydroplane, or null on a dry road
+ * @param thermal              brake temperatures and fade over the run, or null when the thermal model is off
  * @param trace                sampled state over time
  */
 public record SimulationResult(boolean stopped,
@@ -32,13 +33,27 @@ public record SimulationResult(boolean stopped,
                                double brakeEnergyJ,
                                double tireSlipEnergyJ,
                                Double hydroplaningOnsetKmh,
+                               ThermalSummary thermal,
                                List<TracePoint> trace) {
+
+    /**
+     * Brake thermal outcome of a run.
+     *
+     * @param peakFrontC    highest front brake temperature
+     * @param peakRearC     highest rear brake temperature
+     * @param finalFrontC   front brake temperature at the end
+     * @param finalRearC    rear brake temperature at the end
+     * @param minFadeFactor lowest share of normal pad friction on either axle (1 = no fade)
+     */
+    public record ThermalSummary(double peakFrontC, double peakRearC, double finalFrontC, double finalRearC,
+                                 double minFadeFactor) {
+    }
 
     /** Same result without the sampled trace, for callers that only need the summary numbers. */
     public SimulationResult withoutTrace() {
         return new SimulationResult(stopped, stopTimeS, stopDistanceM, reactionDistanceM, brakingDistanceM,
                 distanceTravelledM, timeSimulatedS, peakDecelerationMs2, impactSpeedKmh,
-                brakeEnergyJ, tireSlipEnergyJ, hydroplaningOnsetKmh, List.of());
+                brakeEnergyJ, tireSlipEnergyJ, hydroplaningOnsetKmh, thermal, List.of());
     }
 
     /** Convenience for callers that know the car stops. */

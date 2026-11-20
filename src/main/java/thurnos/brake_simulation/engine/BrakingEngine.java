@@ -28,7 +28,7 @@ import java.util.List;
  * grip, aerodynamic drag, rolling resistance, slope with sin/cos, and the energy the brakes absorb.
  *
  * <p>Pure Java: no Spring, no database, no randomness, so a {@link Scenario} always gives the same result.
- * Not yet modelled: brake heating and fade (Phase 4), cornering.
+ * Brake heating, cooling and fade follow {@link BrakeThermal}. Not yet modelled: cornering.
  *
  * <p>Numerics: the wheel equation is stiff at low speed, so it is advanced with a linearly implicit step that
  * stays stable at the default 1 ms. Car speed and position are advanced exactly for the step's constant
@@ -56,6 +56,8 @@ public final class BrakingEngine {
         final AbsSettings abs = cfg.abs();
         final TireSpec.SlipCurve curve = s.tires().curve();
         final WaterFilm water = s.tires().water();
+        final BrakeThermal thermal = brk.thermal();
+        final boolean heating = thermal.enabled();
 
         final double m = veh.massKg();
         final double wheelbase = veh.wheelbaseM();
@@ -80,6 +82,11 @@ public final class BrakingEngine {
 
         Axle front = new Axle(v / radius, frontLoadStatic, v);
         Axle rear = new Axle(v / radius, rearLoadStatic, v);
+        front.tempC = thermal.initialFrontC();
+        rear.tempC = thermal.initialRearC();
+        double peakFront = front.tempC;
+        double peakRear = rear.tempC;
+        double minFade = 1.0;
 
         double tireForcePrev = 0;
         double decelPrev = 0;
@@ -118,6 +125,10 @@ public final class BrakingEngine {
             double speedAtEnd = Math.max(0, v - decelPrev * dt);   // where the car will be by the end of this step
             double waterGrip = water.gripFactor(speedAtEnd);       // 1 unless the tires are hydroplaning
 
+            front.fade = heating ? thermal.fadeFactor(front.tempC) : 1.0;
+            rear.fade = heating ? thermal.fadeFactor(rear.tempC) : 1.0;
+            minFade = Math.min(minFade, Math.min(front.fade, rear.fade));
+
             step(front, demandFront, loadFront, frontLoadStatic, v, speedAtEnd, waterGrip, pedal, absOn, abs, curve,
                     s.tires().loadSensitivity(), radius, inertia, dt);
             step(rear, demandRear, loadRear, rearLoadStatic, v, speedAtEnd, waterGrip, pedal, absOn, abs, curve,
@@ -128,6 +139,17 @@ public final class BrakingEngine {
             peakDecel = Math.max(peakDecel, decel);
             brakeEnergy += front.brakeEnergy + rear.brakeEnergy;
             slipEnergy += front.slipPower + rear.slipPower;
+            if (heating) {
+                // Heat in from brake work, heat out to the air; explicit Euler is fine, dt*cooling/capacity ~ 1e-6.
+                front.tempC += (thermal.heatToRotor() * front.brakeEnergy
+                        - BrakeThermal.coolingWK(thermal.frontRotorKg(), v) * (front.tempC - thermal.ambientC()) * dt)
+                        / thermal.frontHeatCapacityJK();
+                rear.tempC += (thermal.heatToRotor() * rear.brakeEnergy
+                        - BrakeThermal.coolingWK(thermal.rearRotorKg(), v) * (rear.tempC - thermal.ambientC()) * dt)
+                        / thermal.rearHeatCapacityJK();
+                peakFront = Math.max(peakFront, front.tempC);
+                peakRear = Math.max(peakRear, rear.tempC);
+            }
 
             if (t >= nextTrace) {
                 trace.add(point(t, x, v, decel, pedal, front, rear, waterGrip));
@@ -179,12 +201,15 @@ public final class BrakingEngine {
 
         Double impactKmh = impactSpeedMs == null ? null : impactSpeedMs * 3.6;
         Double onsetKmh = water.isWet() ? water.onsetSpeedMs() * 3.6 : null;
+        SimulationResult.ThermalSummary thermalSummary = heating
+                ? new SimulationResult.ThermalSummary(peakFront, peakRear, front.tempC, rear.tempC, minFade)
+                : null;
         if (stopped) {
             return new SimulationResult(true, stopTime, x, reactionDistance, x - reactionDistance,
-                    x, stopTime, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, List.copyOf(trace));
+                    x, stopTime, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, thermalSummary, List.copyOf(trace));
         }
         return new SimulationResult(false, null, null, reactionDistance, null,
-                x, t, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, List.copyOf(trace));
+                x, t, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, thermalSummary, List.copyOf(trace));
     }
 
     /** 0 until the foot reaches the pedal, then a linear build-up to 1 over {@code rise} seconds. */
@@ -234,7 +259,7 @@ public final class BrakingEngine {
             ax.sinceSample = 0;
         }
 
-        double brakeTorque = demandForce * ax.pressure * radius;
+        double brakeTorque = demandForce * ax.pressure * ax.fade * radius;
 
         // --- Tire force at the END of the step. The wheel is advanced to match the car's speed at that
         //     moment; matching the speed at the start would leave it one step behind and shave a little
@@ -281,7 +306,8 @@ public final class BrakingEngine {
     private static TracePoint point(double t, double x, double v, double decel, double pedal, Axle f, Axle r,
                                     double waterGrip) {
         return new TracePoint(t, x, v, decel, pedal, f.fx, r.fx, f.load, r.load, f.locked, r.locked,
-                f.slip, r.slip, pedal * f.pressure, pedal * r.pressure, waterGrip);
+                f.slip, r.slip, pedal * f.pressure, pedal * r.pressure, waterGrip,
+                f.tempC, r.tempC, f.fade, r.fade);
     }
 
     /** State of one axle's wheel and its ABS channel. */
@@ -291,6 +317,8 @@ public final class BrakingEngine {
         double sampleOmega;         // wheel speed at the last ABS control sample
         double sampleSpeed;         // car speed at the last ABS control sample
         double sinceSample;         // time since the last ABS control sample
+        double tempC;               // brake temperature
+        double fade = 1;            // share of normal pad friction at that temperature
         double pressure = 1;        // share of the driver's brake demand that reaches the brake
         boolean releasing;
         double fx;                  // tire force on the road (mean over the last step)
