@@ -15,6 +15,8 @@ import java.util.List;
  * @param timeSimulatedS       length of the run
  * @param peakDecelerationMs2  strongest deceleration reached
  * @param impactSpeedKmh       speed at the obstacle (0 if the car stops short), or null when there is no obstacle
+ * @param brakeEnergyJ         energy turned into heat in the brakes (input for the Phase 4 thermal model)
+ * @param tireSlipEnergyJ      energy lost to tire slip against the road
  * @param trace                sampled state over time
  */
 public record SimulationResult(boolean stopped,
@@ -26,12 +28,15 @@ public record SimulationResult(boolean stopped,
                                double timeSimulatedS,
                                double peakDecelerationMs2,
                                Double impactSpeedKmh,
+                               double brakeEnergyJ,
+                               double tireSlipEnergyJ,
                                List<TracePoint> trace) {
 
     /** Same result without the sampled trace, for callers that only need the summary numbers. */
     public SimulationResult withoutTrace() {
         return new SimulationResult(stopped, stopTimeS, stopDistanceM, reactionDistanceM, brakingDistanceM,
-                distanceTravelledM, timeSimulatedS, peakDecelerationMs2, impactSpeedKmh, List.of());
+                distanceTravelledM, timeSimulatedS, peakDecelerationMs2, impactSpeedKmh,
+                brakeEnergyJ, tireSlipEnergyJ, List.of());
     }
 
     /** Convenience for callers that know the car stops. */

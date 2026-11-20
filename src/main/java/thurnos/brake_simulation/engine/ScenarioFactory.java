@@ -37,7 +37,7 @@ public final class ScenarioFactory {
         return new Scenario(
                 VehicleSpec.estimate(weightKg),
                 BrakeSpec.fromEfficiency(brakeEfficiency),
-                TireSpec.of(peakMu),
+                TireSpec.forSurface(peakMu, SurfaceKind.fromGripModifier(roadModifier)),
                 DriverSpec.fromReactionTime(reactionTimeS),
                 Scenario.kmhToMs(speedKmh),
                 slopePercent,
