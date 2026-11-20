@@ -15,7 +15,8 @@ import java.util.Map;
 
 /**
  * Time-stepped physics engine. Same parameter names as {@code /api/simulations/execute},
- * plus an optional obstacle distance. Nothing is saved.
+ * plus an optional water film depth in mm ({@code water}, overrides the road row) and an optional
+ * obstacle distance. Nothing is saved.
  */
 @RestController
 @RequestMapping("/api/engine")
@@ -38,11 +39,12 @@ public class EngineController {
             @RequestParam double slope,
             @RequestParam boolean abs,
             @RequestParam DriverCondition driverCondition,
+            @RequestParam(required = false) Double water,
             @RequestParam(required = false) Double obstacle,
             @RequestParam(defaultValue = "true") boolean trace
     ) {
         return service.run(carId, tireId, brakeId, roadId,
-                speed, tread, slope, abs, driverCondition, obstacle, trace);
+                speed, tread, slope, abs, driverCondition, water, obstacle, trace);
     }
 
     /** Out-of-range inputs (negative speed, bad obstacle distance, ...) come back as a 400 with the reason. */

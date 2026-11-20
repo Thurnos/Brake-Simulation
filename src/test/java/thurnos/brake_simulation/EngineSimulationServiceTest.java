@@ -44,7 +44,7 @@ class EngineSimulationServiceTest {
         givenRows();
 
         SimulationResult result = service.run(1L, 1L, 1L, 1L,
-                100, 7, 0, true, DriverCondition.NORMAL, null, true);
+                100, 7, 0, true, DriverCondition.NORMAL, null, null, true);
 
         assertTrue(result.stopped());
         assertTrue(result.stopDistanceM() > 0);
@@ -56,7 +56,7 @@ class EngineSimulationServiceTest {
         givenRows();
 
         SimulationResult result = service.run(1L, 1L, 1L, 1L,
-                100, 7, 0, true, DriverCondition.NORMAL, null, false);
+                100, 7, 0, true, DriverCondition.NORMAL, null, null, false);
 
         assertTrue(result.stopped());
         assertTrue(result.trace().isEmpty());
@@ -67,6 +67,20 @@ class EngineSimulationServiceTest {
         when(carRepo.findById(any())).thenReturn(Optional.empty());
 
         assertThrows(ResponseStatusException.class, () -> service.run(99L, 1L, 1L, 1L,
-                100, 7, 0, true, DriverCondition.NORMAL, null, true));
+                100, 7, 0, true, DriverCondition.NORMAL, null, null, true));
+    }
+
+    @Test
+    void waterOverrideChangesTheResultAndReportsHydroplaningOnset() {
+        givenRows();
+
+        SimulationResult dry = service.run(1L, 1L, 1L, 1L,
+                130, 1.6, 0, true, DriverCondition.NORMAL, 0.0, null, false);
+        SimulationResult flooded = service.run(1L, 1L, 1L, 1L,
+                130, 1.6, 0, true, DriverCondition.NORMAL, 6.0, null, false);
+
+        assertNull(dry.hydroplaningOnsetKmh());
+        assertNotNull(flooded.hydroplaningOnsetKmh());
+        assertTrue(flooded.stopDistanceM() > dry.stopDistanceM());
     }
 }

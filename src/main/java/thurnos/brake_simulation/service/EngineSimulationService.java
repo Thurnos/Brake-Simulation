@@ -52,6 +52,7 @@ public class EngineSimulationService {
                                 double slopePercent,
                                 boolean hasAbs,
                                 DriverCondition driverCondition,
+                                Double waterDepthOverrideMm,
                                 Double obstacleM,
                                 boolean includeTrace) {
 
@@ -64,16 +65,24 @@ public class EngineSimulationService {
         RoadConditions road = roadRepo.findById(BigInteger.valueOf(roadId))
                 .orElseThrow(() -> notFound("Road condition", roadId));
 
+        // explicit request value wins, then the road row, then a guess from the road family
+        Double waterDepthMm = waterDepthOverrideMm != null ? waterDepthOverrideMm : road.getWaterDepthMm();
+        double gripModifier = required(road.getGripModifier(), "road grip modifier");
+        if (waterDepthMm == null) {
+            waterDepthMm = ScenarioFactory.defaultWaterDepthMm(gripModifier);
+        }
+
         Scenario scenario = ScenarioFactory.fromTableValues(
                 required(car.getWeightKg(), "car weight"),
                 required(tire.getBaseGrip(), "tire base grip"),
-                required(road.getGripModifier(), "road grip modifier"),
+                gripModifier,
                 required(brake.getEfficiency(), "brake efficiency"),
                 treadDepthMm,
                 slopePercent,
                 hasAbs,
                 driverCondition.getReactionTime(),
                 speedKmh,
+                waterDepthMm,
                 obstacleM);
 
         SimulationResult result = engine.simulate(scenario);

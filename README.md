@@ -14,9 +14,10 @@ The system combines:
 
 ##  Physics engine (new)
 
-`thurnos.brake_simulation.engine` is a time-stepped braking engine (pedal ramp, load transfer, per-axle grip limits,
-ABS vs locked wheels, drag, slope) that returns a full speed/position/force trace.
-Endpoint: `POST /api/engine/simulate`. See [docs/ENGINE.md](docs/ENGINE.md) for the model, the checks and the
+`thurnos.brake_simulation.engine` is a time-stepped braking engine: pedal ramp, weight transfer, wheel dynamics,
+tire slip curves per surface, an ABS controller that only watches wheel speed, drag, slope, and an energy account
+for the brakes, and (Phase 3) water film depth with hydroplaning and wet-only tread wear. It returns a full speed / slip / force / pressure trace.
+Endpoint: `POST /api/engine/simulate`. See [docs/ENGINE.md](docs/ENGINE.md) for the model, how it is checked and the
 list of placeholders that later phases replace.
 
 ---

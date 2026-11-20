@@ -26,4 +26,11 @@ public class RoadConditions {
 
     @Column(name = "grip_modifier")
     private Double gripModifier;
+
+    /**
+     * Depth of the water film on this road in millimetres. Null means "not stated": the engine then assumes a
+     * typical film for wet-grip roads and none otherwise. Added column; ddl-auto=update creates it.
+     */
+    @Column(name = "water_depth_mm")
+    private Double waterDepthMm;
 }

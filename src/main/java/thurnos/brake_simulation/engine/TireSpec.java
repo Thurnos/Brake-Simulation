@@ -17,8 +17,10 @@ package thurnos.brake_simulation.engine;
  * @param slipB           stiffness: how steeply friction rises at low slip
  * @param slipC           shape: above 1 gives a peak followed by a drop
  * @param slipE           curvature around the peak
+ * @param water           water film on the road and what the tread does about it (hydroplaning)
  */
-public record TireSpec(double peakMu, double loadSensitivity, double slipB, double slipC, double slipE) {
+public record TireSpec(double peakMu, double loadSensitivity, double slipB, double slipC, double slipE,
+                       WaterFilm water) {
 
     public TireSpec {
         VehicleSpec.require(peakMu > 0, "peakMu must be positive");
@@ -26,10 +28,16 @@ public record TireSpec(double peakMu, double loadSensitivity, double slipB, doub
         VehicleSpec.require(slipB > 0, "slipB must be positive");
         VehicleSpec.require(slipC > 1, "slipC must be above 1 so the curve has a peak");
         VehicleSpec.require(slipE <= 1, "slipE must not exceed 1");
+        VehicleSpec.require(water != null, "water is required (use WaterFilm.NONE for a dry road)");
+    }
+
+    /** Tire on a road with no water. */
+    public TireSpec(double peakMu, double loadSensitivity, double slipB, double slipC, double slipE) {
+        this(peakMu, loadSensitivity, slipB, slipC, slipE, WaterFilm.NONE);
     }
 
     public static TireSpec forSurface(double peakMu, SurfaceKind kind) {
-        return new TireSpec(peakMu, 0.10, kind.stiffness, kind.shape, kind.curvature);
+        return new TireSpec(peakMu, 0.10, kind.stiffness, kind.shape, kind.curvature, WaterFilm.NONE);
     }
 
     /** Dry-asphalt curve shape with the given peak friction. */
@@ -38,7 +46,11 @@ public record TireSpec(double peakMu, double loadSensitivity, double slipB, doub
     }
 
     public TireSpec withLoadSensitivity(double k) {
-        return new TireSpec(peakMu, k, slipB, slipC, slipE);
+        return new TireSpec(peakMu, k, slipB, slipC, slipE, water);
+    }
+
+    public TireSpec withWater(WaterFilm film) {
+        return new TireSpec(peakMu, loadSensitivity, slipB, slipC, slipE, film);
     }
 
     /** Builds the lookup used by the engine; do this once per run, it scans the curve to find its peak. */

@@ -17,6 +17,7 @@ import java.util.List;
  * @param impactSpeedKmh       speed at the obstacle (0 if the car stops short), or null when there is no obstacle
  * @param brakeEnergyJ         energy turned into heat in the brakes (input for the Phase 4 thermal model)
  * @param tireSlipEnergyJ      energy lost to tire slip against the road
+ * @param hydroplaningOnsetKmh speed above which the tires start to hydroplane, or null on a dry road
  * @param trace                sampled state over time
  */
 public record SimulationResult(boolean stopped,
@@ -30,13 +31,14 @@ public record SimulationResult(boolean stopped,
                                Double impactSpeedKmh,
                                double brakeEnergyJ,
                                double tireSlipEnergyJ,
+                               Double hydroplaningOnsetKmh,
                                List<TracePoint> trace) {
 
     /** Same result without the sampled trace, for callers that only need the summary numbers. */
     public SimulationResult withoutTrace() {
         return new SimulationResult(stopped, stopTimeS, stopDistanceM, reactionDistanceM, brakingDistanceM,
                 distanceTravelledM, timeSimulatedS, peakDecelerationMs2, impactSpeedKmh,
-                brakeEnergyJ, tireSlipEnergyJ, List.of());
+                brakeEnergyJ, tireSlipEnergyJ, hydroplaningOnsetKmh, List.of());
     }
 
     /** Convenience for callers that know the car stops. */

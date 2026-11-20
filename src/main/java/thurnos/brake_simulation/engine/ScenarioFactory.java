@@ -8,7 +8,34 @@ package thurnos.brake_simulation.engine;
  */
 public final class ScenarioFactory {
 
+    /** Typical film on a road that is simply "wet": light to moderate rain. */
+    public static final double TYPICAL_WET_FILM_MM = 2.0;
+
     private ScenarioFactory() {
+    }
+
+    /**
+     * Convenience overload: the water depth is inferred from the road family (a wet-grip road is given a typical
+     * {@value #TYPICAL_WET_FILM_MM} mm film, everything else is dry). Prefer the overload with an explicit depth
+     * when the road row says how deep the water is.
+     */
+    public static Scenario fromTableValues(double weightKg,
+                                           double tireBaseGrip,
+                                           double roadModifier,
+                                           double brakeEfficiency,
+                                           double treadDepthMm,
+                                           double slopePercent,
+                                           boolean hasAbs,
+                                           double reactionTimeS,
+                                           double speedKmh,
+                                           Double obstacleM) {
+        return fromTableValues(weightKg, tireBaseGrip, roadModifier, brakeEfficiency, treadDepthMm, slopePercent,
+                hasAbs, reactionTimeS, speedKmh, defaultWaterDepthMm(roadModifier), obstacleM);
+    }
+
+    /** Water film assumed for a road row that does not say: typical for wet-grip roads, none otherwise. */
+    public static double defaultWaterDepthMm(double roadModifier) {
+        return SurfaceKind.fromGripModifier(roadModifier) == SurfaceKind.WET ? TYPICAL_WET_FILM_MM : 0.0;
     }
 
     /**
@@ -21,6 +48,7 @@ public final class ScenarioFactory {
      * @param hasAbs          ABS fitted and working
      * @param reactionTimeS   total driver delay (DriverCondition.getReactionTime())
      * @param speedKmh        speed when the hazard appears
+     * @param waterDepthMm    depth of the water film on the road, or null for none
      * @param obstacleM       distance to an obstacle, or null
      */
     public static Scenario fromTableValues(double weightKg,
@@ -32,26 +60,18 @@ public final class ScenarioFactory {
                                            boolean hasAbs,
                                            double reactionTimeS,
                                            double speedKmh,
+                                           Double waterDepthMm,
                                            Double obstacleM) {
-        double peakMu = tireBaseGrip * roadModifier * treadFactor(treadDepthMm);
+        WaterFilm film = WaterFilm.of(waterDepthMm == null ? 0.0 : waterDepthMm, treadDepthMm);
+        double peakMu = tireBaseGrip * roadModifier * film.treadGripFactor();
         return new Scenario(
                 VehicleSpec.estimate(weightKg),
                 BrakeSpec.fromEfficiency(brakeEfficiency),
-                TireSpec.forSurface(peakMu, SurfaceKind.fromGripModifier(roadModifier)),
+                TireSpec.forSurface(peakMu, SurfaceKind.fromGripModifier(roadModifier)).withWater(film),
                 DriverSpec.fromReactionTime(reactionTimeS),
                 Scenario.kmhToMs(speedKmh),
                 slopePercent,
                 hasAbs,
                 obstacleM);
-    }
-
-    /**
-     * Smooth stand-in for the old stepped wear table: 1.0 at 7 mm and above, falling to 0.5 at 1.6 mm
-     * (the legal limit in most countries). Phase 3 replaces this with a wet/dry-aware model, because
-     * tread depth matters mostly on wet roads.
-     */
-    static double treadFactor(double treadDepthMm) {
-        double fraction = Math.min(1, Math.max(0, (treadDepthMm - 1.6) / (7.0 - 1.6)));
-        return 0.5 + 0.5 * fraction;
     }
 }

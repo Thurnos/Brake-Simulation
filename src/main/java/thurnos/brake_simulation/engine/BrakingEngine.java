@@ -21,11 +21,14 @@ import java.util.List;
  * near the peak. Nothing here is a fixed "ABS makes it 95% as good" factor: stopping distances come out of the
  * mechanism.
  *
+ * <p>On a wet road the tires lose friction as the car approaches and passes the hydroplaning speed of the
+ * {@link WaterFilm}, and regain it as the car slows.
+ *
  * <p>Also modelled: driver delay and pedal rise, weight transfer between the axles, a mild load sensitivity of
  * grip, aerodynamic drag, rolling resistance, slope with sin/cos, and the energy the brakes absorb.
  *
  * <p>Pure Java: no Spring, no database, no randomness, so a {@link Scenario} always gives the same result.
- * Not yet modelled: wet-road hydroplaning (Phase 3), brake heating and fade (Phase 4), cornering.
+ * Not yet modelled: brake heating and fade (Phase 4), cornering.
  *
  * <p>Numerics: the wheel equation is stiff at low speed, so it is advanced with a linearly implicit step that
  * stays stable at the default 1 ms. Car speed and position are advanced exactly for the step's constant
@@ -52,6 +55,7 @@ public final class BrakingEngine {
         final BrakeSpec brk = s.brakes();
         final AbsSettings abs = cfg.abs();
         final TireSpec.SlipCurve curve = s.tires().curve();
+        final WaterFilm water = s.tires().water();
 
         final double m = veh.massKg();
         final double wheelbase = veh.wheelbaseM();
@@ -112,10 +116,11 @@ public final class BrakingEngine {
 
             boolean absOn = s.absEnabled() && v > abs.minSpeedMs();
             double speedAtEnd = Math.max(0, v - decelPrev * dt);   // where the car will be by the end of this step
+            double waterGrip = water.gripFactor(speedAtEnd);       // 1 unless the tires are hydroplaning
 
-            step(front, demandFront, loadFront, frontLoadStatic, v, speedAtEnd, pedal, absOn, abs, curve,
+            step(front, demandFront, loadFront, frontLoadStatic, v, speedAtEnd, waterGrip, pedal, absOn, abs, curve,
                     s.tires().loadSensitivity(), radius, inertia, dt);
-            step(rear, demandRear, loadRear, rearLoadStatic, v, speedAtEnd, pedal, absOn, abs, curve,
+            step(rear, demandRear, loadRear, rearLoadStatic, v, speedAtEnd, waterGrip, pedal, absOn, abs, curve,
                     s.tires().loadSensitivity(), radius, inertia, dt);
 
             double tireForce = front.fx + rear.fx;
@@ -125,7 +130,7 @@ public final class BrakingEngine {
             slipEnergy += front.slipPower + rear.slipPower;
 
             if (t >= nextTrace) {
-                trace.add(point(t, x, v, decel, pedal, front, rear));
+                trace.add(point(t, x, v, decel, pedal, front, rear, waterGrip));
                 nextTrace += cfg.traceIntervalS();
             }
 
@@ -156,14 +161,14 @@ public final class BrakingEngine {
                 rear.omega = 0;
                 stopped = true;
                 stopTime = t;
-                trace.add(point(t, x, 0, decel, pedal, front, rear));
+                trace.add(point(t, x, 0, decel, pedal, front, rear, 1.0));
                 break;
             }
             v = vNext;
         }
 
         if (!stopped && trace.isEmpty()) {
-            trace.add(point(t, x, v, 0, 0, front, rear));
+            trace.add(point(t, x, v, 0, 0, front, rear, water.gripFactor(v)));
         }
         if (Double.isNaN(reactionDistance)) {
             reactionDistance = x;
@@ -173,12 +178,13 @@ public final class BrakingEngine {
         }
 
         Double impactKmh = impactSpeedMs == null ? null : impactSpeedMs * 3.6;
+        Double onsetKmh = water.isWet() ? water.onsetSpeedMs() * 3.6 : null;
         if (stopped) {
             return new SimulationResult(true, stopTime, x, reactionDistance, x - reactionDistance,
-                    x, stopTime, peakDecel, impactKmh, brakeEnergy, slipEnergy, List.copyOf(trace));
+                    x, stopTime, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, List.copyOf(trace));
         }
         return new SimulationResult(false, null, null, reactionDistance, null,
-                x, t, peakDecel, impactKmh, brakeEnergy, slipEnergy, List.copyOf(trace));
+                x, t, peakDecel, impactKmh, brakeEnergy, slipEnergy, onsetKmh, List.copyOf(trace));
     }
 
     /** 0 until the foot reaches the pedal, then a linear build-up to 1 over {@code rise} seconds. */
@@ -190,7 +196,7 @@ public final class BrakingEngine {
 
     /** Advances one axle's wheel by one step and works out the tire force it puts on the road. */
     private static void step(Axle ax, double demandForce, double load, double loadStatic, double v,
-                             double vEnd, double pedal, boolean absOn, AbsSettings abs,
+                             double vEnd, double waterGrip, double pedal, boolean absOn, AbsSettings abs,
                              TireSpec.SlipCurve curve, double loadSensitivity,
                              double radius, double inertia, double dt) {
 
@@ -238,7 +244,7 @@ public final class BrakingEngine {
                 ? 1.0
                 : clamp((vEnd - ax.omega * radius) / speedEnd, 0, 1);
         double relativeLoad = loadStatic > 0 ? load / loadStatic : 1;
-        double muScale = Math.max(MIN_MU_FRACTION, 1 - loadSensitivity * (relativeLoad - 1));
+        double muScale = Math.max(MIN_MU_FRACTION, 1 - loadSensitivity * (relativeLoad - 1)) * waterGrip;
         double fx0 = curve.mu(slipEnd) * muScale * load;
         double dFxdOmega = -load * curve.slope(slipEnd) * muScale * radius / speedEnd;
 
@@ -272,9 +278,10 @@ public final class BrakingEngine {
         return Math.min(hi, Math.max(lo, value));
     }
 
-    private static TracePoint point(double t, double x, double v, double decel, double pedal, Axle f, Axle r) {
+    private static TracePoint point(double t, double x, double v, double decel, double pedal, Axle f, Axle r,
+                                    double waterGrip) {
         return new TracePoint(t, x, v, decel, pedal, f.fx, r.fx, f.load, r.load, f.locked, r.locked,
-                f.slip, r.slip, pedal * f.pressure, pedal * r.pressure);
+                f.slip, r.slip, pedal * f.pressure, pedal * r.pressure, waterGrip);
     }
 
     /** State of one axle's wheel and its ABS channel. */
