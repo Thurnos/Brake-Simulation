@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brake Engine Playback</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --dim:#94a3b8;
+          --blue:#60a5fa; --orange:#fb923c; --green:#4ade80; --red:#f87171; --violet:#c084fc; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:20px; font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text); }
+  h2 { margin:0 0 4px; } .sub { color:var(--dim); margin:0 0 16px; font-size:14px; }
+  .card { background:var(--card); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  label { font-size:12px; color:var(--dim); display:block; }
+  select,input[type=number] { width:100%; padding:6px; border-radius:6px; border:1px solid var(--line);
+          background:#0b1220; color:var(--text); }
+  .check { display:flex; align-items:center; gap:6px; padding-top:18px; color:var(--text); }
+  button { padding:8px 14px; border:0; border-radius:6px; background:#3b82f6; color:#fff; cursor:pointer; }
+  button.alt { background:#475569; } button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:10px; margin-top:12px; align-items:center; flex-wrap:wrap; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+  .tile { background:#0b1220; border-radius:8px; padding:10px; }
+  .tile b { display:block; font-size:20px; } .tile span { font-size:12px; color:var(--dim); }
+  canvas { width:100%; display:block; background:#0b1220; border-radius:8px; }
+  .legend { font-size:12px; color:var(--dim); margin:6px 0 0; display:flex; gap:14px; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; }
+  #readout { font-variant-numeric:tabular-nums; color:var(--dim); font-size:13px; }
+  #error { color:var(--red); margin-top:8px; } input[type=range] { flex:1; min-width:200px; }
+  h3 { margin:0 0 8px; font-size:15px; }
+</style>
+</head>
+<body>
+<h2>Brake engine playback</h2>
+<p class="sub">Runs <code>/api/engine/simulate</code> and plays the stop back: road, speed, slip and brake heat.</p>
+
+<div class="card">
+  <div class="grid">
+    <div><label>Car</label><select id="car"></select></div>
+    <div><label>Tire</label><select id="tire"></select></div>
+    <div><label>Brakes</label><select id="brake"></select></div>
+    <div><label>Road</label><select id="road"></select></div>
+    <div><label>Speed (km/h)</label><input type="number" id="speed" value="100"></div>
+    <div><label>Tread (mm)</label><input type="number" id="tread" value="7" step="0.1"></div>
+    <div><label>Slope (% downhill)</label><input type="number" id="slope" value="0"></div>
+    <div><label>Water depth (mm, empty = road default)</label><input type="number" id="water" step="0.5" min="0"></div>
+    <div><label>Brake temp at start (°C)</label><input type="number" id="brakeTemp" value="20"></div>
+    <div><label>Driver</label><select id="driver"><option>ALERT</option><option selected>NORMAL</option><option>TIRED</option></select></div>
+    <div><label>Obstacle (m, empty = none)</label><input type="number" id="obstacle" min="1"></div>
+    <label class="check"><input type="checkbox" id="abs" checked> ABS</label>
+  </div>
+  <div class="row">
+    <button id="run">Run stop</button>
+    <label style="display:flex;align-items:center;gap:6px">Repeated stops
+      <input type="number" id="stops" value="6" min="2" max="20" style="width:70px"></label>
+    <label style="display:flex;align-items:center;gap:6px">rest (s)
+      <input type="number" id="rest" value="15" min="0" style="width:70px"></label>
+    <button id="repeat" class="alt">Run repeated stops</button>
+  </div>
+  <div id="error"></div>
+</div>
+
+<div id="out" hidden>
+  <div class="card"><div class="tiles" id="tiles"></div></div>
+
+  <div class="card">
+    <canvas id="roadView" height="130"></canvas>
+    <div class="row">
+      <button id="play">Play</button>
+      <input type="range" id="scrub" min="0" max="1000" value="0">
+      <span id="readout"></span>
+    </div>
+  </div>
+
+  <div class="card"><h3>Speed and deceleration</h3><canvas id="cSpeed" height="190"></canvas>
+    <div class="legend"><span><i style="background:var(--blue)"></i>speed (km/h)</span>
+      <span><i style="background:var(--orange)"></i>deceleration (g, right axis)</span></div></div>
+  <div class="card"><h3>Wheel slip</h3><canvas id="cSlip" height="170"></canvas>
+    <div class="legend"><span><i style="background:var(--blue)"></i>front</span>
+      <span><i style="background:var(--orange)"></i>rear</span>
+      <span><i style="background:var(--green)"></i>front brake pressure (ABS)</span>
+      <span><i style="background:var(--red)"></i>water grip factor</span></div></div>
+  <div class="card"><h3>Brake heat and fade</h3><canvas id="cHeat" height="170"></canvas>
+    <div class="legend"><span><i style="background:var(--blue)"></i>front temp (°C)</span>
+      <span><i style="background:var(--orange)"></i>rear temp (°C)</span>
+      <span><i style="background:var(--red)"></i>front pad friction left (right axis)</span></div></div>
+</div>
+
+<div class="card" id="seqCard" hidden>
+  <h3>Repeated stops: braking distance and brake temperature</h3>
+  <canvas id="cSeq" height="220"></canvas>
+  <div class="legend"><span><i style="background:var(--blue)"></i>braking distance (m)</span>
+    <span><i style="background:var(--orange)"></i>front brake peak temp (°C)</span></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const C = { blue:'#60a5fa', orange:'#fb923c', green:'#4ade80', red:'#f87171', grid:'#243044', dim:'#94a3b8' };
+let trace = [], tEnd = 0, result = null, playing = false, playT0 = 0;
+
+async function load() {
+  const get = u => fetch(u).then(r => r.json());
+  const [cars, tires, brakes, roads] = await Promise.all(
+      ['/api/cars', '/api/tires', '/api/brakes', '/api/roads'].map(get));
+  fill('car', cars, c => c.brand + ' ' + c.model);
+  fill('tire', tires, t => t.brand + ' ' + t.model);
+  fill('brake', brakes, b => b.brand + ' ' + b.model);
+  fill('road', roads, r => r.name);
+}
+function fill(id, data, label) {
+  const el = $(id);
+  data.forEach(d => el.add(new Option(label(d), d.id)));
+}
+
+function params(extra) {
+  const p = new URLSearchParams({
+    carId: $('car').value, tireId: $('tire').value, brakeId: $('brake').value, roadId: $('road').value,
+    speed: $('speed').value, tread: $('tread').value, slope: $('slope').value,
+    abs: $('abs').checked, driverCondition: $('driver').value });
+  if ($('water').value !== '') p.set('water', $('water').value);
+  if ($('brakeTemp').value !== '') p.set('brakeTemp', $('brakeTemp').value);
+  for (const k in extra) p.set(k, extra[k]);
+  return p;
+}
+async function post(url, p) {
+  $('error').textContent = '';
+  const res = await fetch(url + '?' + p, { method: 'POST' });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || body.message || ('HTTP ' + res.status));
+  return body;
+}
+
+$('run').onclick = async () => {
+  try {
+    const extra = {};
+    if ($('obstacle').value !== '') extra.obstacle = $('obstacle').value;
+    show(await post('/api/engine/simulate', params(extra)));
+  } catch (e) { $('error').textContent = e.message; }
+};
+$('repeat').onclick = async () => {
+  try {
+    const runs = await post('/api/engine/repeated-stops',
+        params({ stops: $('stops').value, rest: $('rest').value }));
+    $('seqCard').hidden = false;
+    drawSequence(runs);
+  } catch (e) { $('error').textContent = e.message; }
+};
+
+function tile(label, value) {
+  const d = document.createElement('div'); d.className = 'tile';
+  const b = document.createElement('b'); b.textContent = value;
+  const s = document.createElement('span'); s.textContent = label;
+  d.append(b, s); return d;
+}
+const f1 = (v, u) => (v == null ? '–' : v.toFixed(1) + (u || ''));
+
+function show(r) {
+  result = r; trace = r.trace || [];
+  if (!trace.length) { $('error').textContent = 'No trace returned.'; return; }
+  tEnd = trace[trace.length - 1].timeS;
+  $('out').hidden = false;
+  const tiles = $('tiles'); tiles.replaceChildren(
+    tile('stopping distance', r.stopped ? f1(r.stopDistanceM, ' m') : 'did not stop'),
+    tile('braking distance', f1(r.brakingDistanceM, ' m')),
+    tile('reaction distance', f1(r.reactionDistanceM, ' m')),
+    tile('stop time', f1(r.stopTimeS, ' s')),
+    tile('peak deceleration', (r.peakDecelerationMs2 / 9.81).toFixed(2) + ' g'),
+    tile('impact speed', r.impactSpeedKmh == null ? 'no obstacle' : f1(r.impactSpeedKmh, ' km/h')),
+    tile('hydroplaning above', r.hydroplaningOnsetKmh == null ? 'dry' : f1(r.hydroplaningOnsetKmh, ' km/h')),
+    tile('peak brake temp', r.thermal ? Math.max(r.thermal.peakFrontC, r.thermal.peakRearC).toFixed(0) + ' °C' : '–'),
+    tile('lowest pad friction', r.thermal ? (100 * r.thermal.minFadeFactor).toFixed(0) + ' %' : '–'));
+  $('scrub').value = 0; playing = false; $('play').textContent = 'Play';
+  drawAll(0);
+}
+
+function at(t) {   // trace point at time t (linear between samples)
+  let lo = 0, hi = trace.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (trace[m].timeS <= t) lo = m; else hi = m; }
+  const a = trace[lo], b = trace[hi], u = b.timeS > a.timeS ? Math.min(1, Math.max(0, (t - a.timeS) / (b.timeS - a.timeS))) : 0;
+  const mix = k => a[k] + (b[k] - a[k]) * u;
+  return { t, x: mix('positionM'), v: mix('speedMs'), a: mix('decelerationMs2'), fs: mix('frontSlip'), rs: mix('rearSlip'),
+           fp: mix('frontPressure'), ft: mix('frontBrakeTempC'), rt: mix('rearBrakeTempC'),
+           ff: mix('frontFadeFactor'), wg: mix('waterGripFactor'), pedal: mix('pedal'), fl: a.frontLocked, rl: a.rearLocked };
+}
+
+function setup(cv) {   // crisp canvas at any width
+  // The logical height is remembered once: setting cv.height below overwrites the height attribute, so reading
+  // it again on the next draw would multiply it by the pixel ratio every time.
+  if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height');
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = +cv.dataset.h;
+  cv.style.height = h + 'px';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+
+function drawRoad(p) {
+  const { g, w, h } = setup($("roadView"));
+  const lastX = trace[trace.length - 1].positionM;
+  const obstacle = parseFloat($('obstacle').value);
+  const span = Math.max(lastX, isNaN(obstacle) ? 0 : obstacle) * 1.08 + 8, pad = 24;
+  const sx = x => pad + (w - 2 * pad) * x / span, road = h - 54;
+  g.fillStyle = '#1b2638'; g.fillRect(0, road - 28, w, 56);
+  g.strokeStyle = '#64748b'; g.setLineDash([14, 14]); g.beginPath(); g.moveTo(0, road); g.lineTo(w, road); g.stroke(); g.setLineDash([]);
+  const step = span > 200 ? 50 : span > 80 ? 20 : 10;
+  g.fillStyle = C.dim; g.font = '11px sans-serif'; g.textAlign = 'center';
+  for (let m = 0; m <= span; m += step) { g.fillRect(sx(m), road + 30, 1, 5); g.fillText(m + ' m', sx(m), road + 48); }
+  if (result.reactionDistanceM > 0) {          // distance covered before the brakes bite
+    g.fillStyle = 'rgba(251,146,60,.18)'; g.fillRect(sx(0), road - 28, sx(result.reactionDistanceM) - sx(0), 56);
+    g.fillStyle = C.orange; g.textAlign = 'left'; g.fillText('reaction', sx(0) + 4, road - 32);
+  }
+  if (!isNaN(obstacle)) { g.fillStyle = C.red; g.fillRect(sx(obstacle) - 2, road - 34, 4, 68); g.textAlign = 'center'; g.fillText('obstacle', sx(obstacle), road - 40); }
+  if (result.stopDistanceM != null) { g.fillStyle = C.green; g.fillRect(sx(result.stopDistanceM) - 1, road - 30, 2, 60); }
+  // trail of where the brake lights were on
+  g.strokeStyle = 'rgba(248,113,113,.7)'; g.lineWidth = 3; g.beginPath();
+  trace.filter(q => q.timeS <= p.t && q.pedal > 0.05).forEach((q, i) => i ? g.lineTo(sx(q.positionM), road + 20) : g.moveTo(sx(q.positionM), road + 20));
+  g.stroke(); g.lineWidth = 1;
+  const cx = sx(p.x), braking = p.pedal > 0.05;   // the car, nose to the right
+  g.fillStyle = '#60a5fa'; g.fillRect(cx - 34, road - 12, 34, 24);
+  g.fillStyle = '#93c5fd'; g.fillRect(cx - 24, road - 18, 16, 8);
+  g.fillStyle = braking ? C.red : '#475569'; g.fillRect(cx - 36, road - 8, 3, 16);
+  if (p.fl || p.rl) { g.fillStyle = C.orange; g.textAlign = 'left'; g.fillText('wheels locked', cx + 6, road - 18); }
+}
+
+function chart(id, series, yMax, p, opts) {
+  const { g, w, h } = setup($(id));
+  const L = 44, R = opts.rMax ? 44 : 12, T = 8, B = 22, x = t => L + (w - L - R) * t / (tEnd || 1), y = v => h - B - (h - T - B) * v / yMax;
+  g.strokeStyle = C.grid; g.fillStyle = C.dim; g.font = '11px sans-serif'; g.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) { const v = yMax * i / 4; g.beginPath(); g.moveTo(L, y(v)); g.lineTo(w - R, y(v)); g.stroke(); g.fillText(opts.fmt ? opts.fmt(v) : v.toFixed(0), L - 5, y(v) + 4); }
+  if (opts.rMax) { g.textAlign = 'left'; for (let i = 0; i <= 4; i++) g.fillText(opts.rFmt(opts.rMax * i / 4), w - R + 5, y(yMax * i / 4) + 4); }
+  g.textAlign = 'center';
+  const stepT = tEnd > 20 ? 5 : tEnd > 8 ? 2 : 1;
+  for (let t = 0; t <= tEnd; t += stepT) g.fillText(t + ' s', x(t), h - 6);
+  series.forEach(s => {
+    g.strokeStyle = s.color; g.lineWidth = 2; g.beginPath();
+    trace.forEach((q, i) => { const v = s.r ? Math.min(yMax, Math.max(0, s.get(q) / opts.rMax * yMax)) : Math.min(yMax, Math.max(0, s.get(q))); i ? g.lineTo(x(q.timeS), y(v)) : g.moveTo(x(q.timeS), y(v)); });
+    g.stroke();
+  });
+  g.lineWidth = 1; g.strokeStyle = '#e2e8f0'; g.beginPath(); g.moveTo(x(p.t), T); g.lineTo(x(p.t), h - B); g.stroke();
+}
+
+function drawAll(t) {
+  const p = at(t);
+  const v0 = Math.max(10, trace[0].speedMs * 3.6), tMax = Math.max(60, ...trace.map(q => Math.max(q.frontBrakeTempC, q.rearBrakeTempC)));
+  drawRoad(p);
+  chart('cSpeed', [{ color: C.blue, get: q => q.speedMs * 3.6 }, { color: C.orange, r: true, get: q => q.decelerationMs2 / 9.81 }],
+        Math.ceil(v0 / 20) * 20, p, { fmt: v => v.toFixed(0), rMax: 1.5, rFmt: v => v.toFixed(1) + ' g' });
+  chart('cSlip', [{ color: C.blue, get: q => q.frontSlip }, { color: C.orange, get: q => q.rearSlip },
+                  { color: C.green, get: q => q.frontPressure }, { color: C.red, get: q => q.waterGripFactor }], 1, p, { fmt: v => v.toFixed(2) });
+  chart('cHeat', [{ color: C.blue, get: q => q.frontBrakeTempC }, { color: C.orange, get: q => q.rearBrakeTempC },
+                  { color: C.red, r: true, get: q => q.frontFadeFactor }], Math.ceil(tMax / 100) * 100, p,
+        { fmt: v => v.toFixed(0), rMax: 1, rFmt: v => (100 * v).toFixed(0) + '%' });
+  $('readout').textContent = `t ${p.t.toFixed(2)} s · ${(p.v * 3.6).toFixed(0)} km/h · ${(p.a / 9.81).toFixed(2)} g · `
+      + `slip F ${p.fs.toFixed(2)} R ${p.rs.toFixed(2)} · brakes ${p.ft.toFixed(0)}/${p.rt.toFixed(0)} °C · pads ${(100 * p.ff).toFixed(0)} %`;
+}
+
+$('scrub').oninput = e => { playing = false; $('play').textContent = 'Play'; drawAll(tEnd * e.target.value / 1000); };
+$('play').onclick = () => {
+  if (!trace.length) return;
+  if (playing) { playing = false; $('play').textContent = 'Play'; return; }
+  playing = true; $('play').textContent = 'Pause';
+  const startFrac = $('scrub').value >= 1000 ? 0 : $('scrub').value / 1000;
+  playT0 = performance.now() - startFrac * tEnd * 1000;
+  (function frame(now) {
+    if (!playing) return;
+    const t = Math.min(tEnd, (now - playT0) / 1000);
+    $('scrub').value = 1000 * t / tEnd; drawAll(t);
+    if (t >= tEnd) { playing = false; $('play').textContent = 'Play'; } else requestAnimationFrame(frame);
+  })(performance.now());
+};
+window.addEventListener('resize', () => { if (trace.length) drawAll(tEnd * $('scrub').value / 1000); });
+
+function drawSequence(runs) {
+  const { g, w, h } = setup($('cSeq'));
+  const L = 46, R = 46, T = 14, B = 26, n = runs.length, slot = (w - L - R) / n;
+  const dMax = Math.max(...runs.map(r => r.brakingDistanceM || 0)) * 1.15 || 1;
+  const tMax = Math.max(100, ...runs.map(r => r.thermal.peakFrontC)) * 1.1;
+  g.font = '11px sans-serif'; g.fillStyle = C.dim;
+  g.strokeStyle = C.grid; for (let i = 0; i <= 4; i++) { const y = h - B - (h - T - B) * i / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke(); g.textAlign = 'right'; g.fillText((dMax * i / 4).toFixed(0), L - 5, y + 4); g.textAlign = 'left'; g.fillText((tMax * i / 4).toFixed(0), w - R + 5, y + 4); }
+  runs.forEach((r, i) => {
+    const bh = (h - T - B) * (r.brakingDistanceM || 0) / dMax, x = L + slot * i + slot * 0.2;
+    g.fillStyle = C.blue; g.fillRect(x, h - B - bh, slot * 0.6, bh);
+    g.fillStyle = C.dim; g.textAlign = 'center'; g.fillText(String(i + 1), x + slot * 0.3, h - 9);
+    g.fillText((r.brakingDistanceM || 0).toFixed(1), x + slot * 0.3, h - B - bh - 4);
+  });
+  g.strokeStyle = C.orange; g.lineWidth = 2; g.beginPath();
+  runs.forEach((r, i) => { const x = L + slot * (i + 0.5), y = h - B - (h - T - B) * r.thermal.peakFrontC / tMax; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke(); g.lineWidth = 1;
+}
+
+load().catch(e => { $('error').textContent = 'Could not load cars, tires, brakes and roads: ' + e.message; });
+</script>
+</body>
+</html>
